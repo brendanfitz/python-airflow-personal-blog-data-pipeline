@@ -96,8 +96,9 @@ class StockIndexScraper(object):
         )
 
         df = (df_without_weights
-            .join(industry_weights, on=['Industry'])
             .fillna("Unknown")
+            .join(industry_weights, on=['Industry'])
+            .fillna(0)
             .sort_values(['Industry Weight', 'Weight'], ascending=[False, False])
         )
 
