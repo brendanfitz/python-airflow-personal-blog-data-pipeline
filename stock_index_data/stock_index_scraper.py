@@ -1,8 +1,9 @@
 import requests
 import json
-from os import environ
+from os import environ, mkdir, path
 import pandas as pd
 import boto3
+import time
 
 class StockIndexScraper(object):
 
@@ -101,3 +102,35 @@ class StockIndexScraper(object):
         )
 
         return df
+
+    def write_csv(self, verbose=False):
+        timestr = time.strftime("%Y%m%d-%H%M%S")
+        filename = f"{self.stock_index_name}_{timestr}.csv"
+
+        if not path.isdir('data'):
+            mkdir('data')
+        filepath = path.join('data', filename)
+
+        column_order = [
+            "Stock Index Name",
+            "Symbol",
+            "Company",
+            "Weight",
+            "Price",
+            "Industry",
+            "Industry Weight"
+        ]
+
+        (pd.DataFrame(self.data)
+            .assign(stock_index_name=self.stock_index_name)
+            .rename(columns={"stock_index_name": "Stock Index Name"})
+            .reindex(columns=column_order)
+            .to_csv(filepath, index=False)
+        )
+
+        if verbose:
+            print("="*80)
+            print(f"See file located at {filepath}")
+            print("="*80)
+
+        return filepath
