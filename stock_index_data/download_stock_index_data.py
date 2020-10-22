@@ -19,15 +19,16 @@ def main(args):
             create_query = f.read()
         cur.execute(create_query)
 
-        tup = scraper.data_to_tuples()
-        import pdb; pdb.set_trace();
-        # args_str = ','.join(cur.mogrify("(%s,%s,%s,%s,%s,%s,%s)", x) for x in tup)
-        cur.execute("INSERT INTO stock_index_components VALUES (%s,%s,%s,%s,%s,%s,%s)", tup[0]) 
+        cur.execute("DELETE FROM stock_index_components")
+        for row in scraper.data_to_tuples():
+            cur.execute("INSERT INTO stock_index_components VALUES (%s,%s,%s,%s,%s,%s,%s)", row) 
 
         conn.commit()
     finally:
         cur.close()
         conn.close()
+
+    print("Data load complete. {:,.0f} rows loaded".format(len(scraper.data)))
 
 def parse_args():
     description = "download stock index data from s3"
