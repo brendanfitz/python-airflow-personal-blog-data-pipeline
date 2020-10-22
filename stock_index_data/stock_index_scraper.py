@@ -111,6 +111,16 @@ class StockIndexScraper(object):
             mkdir('data')
         filepath = path.join('data', filename)
 
+        self.data_to_df().to_csv(filepath, index=False)
+
+        if verbose:
+            print("="*80)
+            print(f"See file located at {filepath}")
+            print("="*80)
+
+        return filepath
+
+    def data_to_df(self):
         column_order = [
             "Stock Index Name",
             "Symbol",
@@ -121,16 +131,21 @@ class StockIndexScraper(object):
             "Industry Weight"
         ]
 
-        (pd.DataFrame(self.data)
+        df = (pd.DataFrame(self.data)
             .assign(stock_index_name=self.stock_index_name)
             .rename(columns={"stock_index_name": "Stock Index Name"})
             .reindex(columns=column_order)
-            .to_csv(filepath, index=False)
         )
 
-        if verbose:
-            print("="*80)
-            print(f"See file located at {filepath}")
-            print("="*80)
+        return df
 
-        return filepath
+    def data_to_tuples(self):
+        df = self.data_to_df()
+
+        records = list(df.to_records(index=False))
+
+        records_tuple = tuple([tuple(row) for row in records])
+
+        return records_tuple
+
+
