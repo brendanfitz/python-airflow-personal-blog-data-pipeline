@@ -130,3 +130,6 @@ dmypy.json
 
 # ini files
 *\.ini
+
+# data directorys
+data/
