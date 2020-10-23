@@ -1,3 +1,4 @@
+from os import path
 import argparse
 import configparser
 import psycopg2
@@ -7,7 +8,7 @@ def main(args):
     scraper = StockIndexScraper(args.index, from_s3=True)
 
     config = configparser.ConfigParser()
-    config.read('config.ini')
+    config.read(path.expanduser('~/config.ini'))
     db_kwargs = dict(config['postgres'])
 
     try:
