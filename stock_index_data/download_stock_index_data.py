@@ -6,7 +6,6 @@ from stock_index_scraper import StockIndexScraper
 def main(args):
     scraper = StockIndexScraper(args.index, from_s3=True)
 
-
     config = configparser.ConfigParser()
     config.read('config.ini')
     db_kwargs = dict(config['postgres'])
@@ -19,9 +18,13 @@ def main(args):
             create_query = f.read()
         cur.execute(create_query)
 
-        cur.execute("DELETE FROM stock_index_components")
+        if args.cleartbl:
+            cur.execute("DELETE FROM stock_index_components")
+
         for row in scraper.data_to_tuples():
-            cur.execute("INSERT INTO stock_index_components VALUES (%s,%s,%s,%s,%s,%s,%s)", row) 
+            insert_stmt = ("INSERT INTO stock_index_components "
+                           "VALUES""(%s,%s,%s,%s,%s,%s,%s)")
+            cur.execute(insert_stmt, row) 
 
         conn.commit()
     finally:
@@ -33,7 +36,11 @@ def main(args):
 def parse_args():
     description = "download stock index data from s3"
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("-i", "--index")
+    parser.add_argument("index", help="dowjones or sp500")
+    parser.add_argument("--cleartbl",
+        action="store_true",
+        help="clear table before loading"
+    )
     args = parser.parse_args()
     return args
 
