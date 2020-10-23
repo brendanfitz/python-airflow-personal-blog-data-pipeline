@@ -14,21 +14,20 @@ def main(args):
         conn = psycopg2.connect(**db_kwargs)
         cur = conn.cursor()
 
-        with open('create_stock_index_table.sql') as f:
+        with open('create_index_component_stocks_table.sql') as f:
             create_query = f.read()
         cur.execute(create_query)
 
         if args.cleartbl:
-            cur.execute("DELETE FROM stock_index_components")
+            cur.execute("DELETE FROM visual.index_component_stocks")
 
         for row in scraper.data_to_tuples():
-            insert_stmt = ("INSERT INTO stock_index_components "
+            insert_stmt = ("INSERT INTO visuals.index_component_stocks "
                            "VALUES""(%s,%s,%s,%s,%s,%s,%s)")
-            cur.execute(insert_stmt, row) 
+            cur.execute(insert_stmt, row)
 
         conn.commit()
     finally:
-        cur.close()
         conn.close()
 
     print("Data load complete. {:,.0f} rows loaded".format(len(scraper.data)))
