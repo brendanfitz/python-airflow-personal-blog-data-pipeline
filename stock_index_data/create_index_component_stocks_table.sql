@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS stock_index_components (
+CREATE TABLE IF NOT EXISTS visuals.index_component_stocks (
     stock_index_name varchar(255),
     symbol varchar(255),
     company varchar(255),
