@@ -19,8 +19,8 @@ class StockIndexScraper(object):
             msg = f'stock_index_name must be in {StockIndexScraper.uris}'
             raise ValueError(msg)
 
-        df_scraped_func = self.df_scraped_from_s3 if self.from_s3 else self.df_scraped_from_web
-        df_scraped = df_scraped_func()
+        data_loader = self.s3_load if self.from_s3 else self.web_load
+        df_scraped = data_loader()
 
         industries = self.scrape_stock_industries()
 
@@ -32,7 +32,7 @@ class StockIndexScraper(object):
         )
         return data
 
-    def df_scraped_from_web(self):
+    def web_load(self):
         url = r'https://www.slickcharts.com/{}'.format(self.stock_index_name)
         response = requests.get(url)
         df = (pd.read_html(response.text)[0]
@@ -40,7 +40,7 @@ class StockIndexScraper(object):
         )
         return df
 
-    def df_scraped_from_s3(self):
+    def s3_load(self):
         aws_config = {
             'aws_access_key_id': environ.get('METIS_APP_AWS_ACCESS_KEY_ID'),
             'aws_secret_access_key': environ.get('METIS_APP_AWS_SECRET_KEY'),
