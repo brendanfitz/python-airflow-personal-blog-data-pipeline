@@ -5,7 +5,7 @@ import psycopg2
 from stock_index_scraper import StockIndexScraper
 
 def main(args):
-    scraper = StockIndexScraper(args.index, from_s3=True)
+    scraper = StockIndexScraper(args.index, from_s3=args.webload)
 
     config = configparser.ConfigParser()
     config.read(path.expanduser('~/config.ini'))
@@ -39,6 +39,7 @@ def parse_args():
     description = "download stock index data from s3"
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("index", help="dowjones or sp500")
+    parser.add_argument("--webload", action="store_true")
     args = parser.parse_args()
     return args
 

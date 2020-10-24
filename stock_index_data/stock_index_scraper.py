@@ -8,6 +8,14 @@ import time
 class StockIndexScraper(object):
 
     uris = ['sp500', 'dowjones']
+    headers = {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9", 
+        "Accept-Encoding": "gzip, deflate",
+        "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
+        "Dnt": "1",
+        "Upgrade-Insecure-Requests": "1",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36", 
+    }
 
     def __init__(self, stock_index_name, from_s3):
         self.stock_index_name = stock_index_name
@@ -34,10 +42,22 @@ class StockIndexScraper(object):
 
     def web_load(self):
         url = r'https://www.slickcharts.com/{}'.format(self.stock_index_name)
-        response = requests.get(url)
-        df = (pd.read_html(response.text)[0]
-            .set_index('Symbol')
-        )
+        response = requests.get(url, headers=self.headers)
+        try:
+            df = (pd.read_html(response.text)[0]
+                .set_index('Symbol')
+            )
+        except ValueError as e:
+            filename = f"{self.stock_index_name}_error_page.html"
+            with open(filename, 'w') as f:
+                f.write(response.text)
+
+            print("\nRequest Headers")
+            print("*"*80)
+            print(response.request.headers)
+            print("*"*80)
+
+            raise e
         return df
 
     def s3_load(self):
