@@ -1,6 +1,7 @@
 from datetime import timedelta
 from airflow import DAG
 from airflow.operators.bash_operator import BashOperator
+from first_dag_utils import greeting_command
 
 default_args = {
     'owner': 'airflow',
@@ -15,10 +16,6 @@ dag = DAG('first_dag',
     description="My first dag WOO WOO!",
     schedule_interval="@once",
 )
-
-greeting_command = """\
-echo "Hi, I'm {{params.name}}'s Airflow"\
-"""
 
 greeting_task = BashOperator(
     task_id='greeting',
