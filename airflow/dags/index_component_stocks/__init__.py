@@ -1,1 +1,0 @@
-from index_component_stocks.stock_index_scraper import StockIndexScraper

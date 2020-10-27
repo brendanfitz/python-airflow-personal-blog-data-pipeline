@@ -5,15 +5,18 @@ from datetime import timedelta
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.operators.dummy_operator import DummyOperator
-# from index_component_stocks import StockIndexScraper
+
+import sys
+sys.path.insert(0, "/home/brendan/Github/python-airflow-personal-blog-data-pipeline/index_component_stocks")
+from stock_index_scraper import StockIndexScraper
 
 default_args = dict(
     owner='airflow',
     depends_on_past=False,
     catchup=False,
     start_date='2020-10-25',
-    retries=1,
-    retry_delay=timedelta(minutes=5)
+    retries=0,
+    # retry_delay=timedelta(minutes=5)
 )
 
 dag = DAG(
@@ -25,6 +28,7 @@ dag = DAG(
 
 dummy = DummyOperator(task_id='dummy_op', dag=dag)
 
+"""
 DATADIR = 'data'
 if not path.isdir(DATADIR):
     mkdir(DATADIR)
@@ -57,11 +61,17 @@ def scrape_stock_industries(stock_index_name):
 
     filepath = save_df_to_file(df, 'stock_industries')
     return filepath
-
+"""
+def scrape_stock_industries(stock_index_name):
+    try:
+        scraper = StockIndexScraper(stock_index_name, from_s3=True, load_all=False)
+        filepath = scraper.scrape_stock_industries(save_to_file=True)
+        return {'filepath': filepath}
+    except:
+        print("error")
 
 fetch_stock_industries = PythonOperator(
     task_id='fetch_stock_industries',
-    # python_callable=scraper.scrape_stock_industries,
     python_callable=scrape_stock_industries,
     op_kwargs={'stock_index_name': 'dowjones'},
     dag=dag,
