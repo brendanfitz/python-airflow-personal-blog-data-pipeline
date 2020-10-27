@@ -1,7 +1,7 @@
 from datetime import timedelta
 from airflow import DAG
 from airflow.operators.bash_operator import BashOperator
-from first_dag_utils import greeting_command
+# from first_dag_utils import greeting_command
 
 default_args = {
     'owner': 'airflow',
@@ -10,6 +10,10 @@ default_args = {
     'retries': 1,
     'retry_delay': timedelta(minutes=1),
 }
+
+greeting_command = """\
+echo "Hi, I'm {{params.name}}'s Airflow"\
+"""
 
 dag = DAG('first_dag',
     default_args=default_args,
