@@ -16,11 +16,28 @@ class StockIndexScraper(object):
         "Upgrade-Insecure-Requests": "1",
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36", 
     }
+    DATADIR = 'data'
 
-    def __init__(self, stock_index_name, from_s3):
+    def __init__(self, stock_index_name, from_s3, load_all=True):
+        if not path.isdir(self.DATADIR):
+            mkdir(self.DATADIR)
         self.stock_index_name = stock_index_name
         self.from_s3 = from_s3
-        self.data = self.scrape_index_component_stocks()
+
+        if load_all:
+            self.df_scraped = self.scrape_index_component_stocks()
+
+            self.industries = self.scrape_stock_industries()
+
+            self.df = self.clean_df_scraped_and_merge_industries(
+                self.df_scraped,
+                self.industries
+            )
+
+            self.data = (self.df
+                .reset_index()
+                .to_dict(orient='records')
+            )
 
     def scrape_index_component_stocks(self):
         if self.stock_index_name not in StockIndexScraper.uris:
@@ -29,16 +46,8 @@ class StockIndexScraper(object):
 
         data_loader = self.s3_load if self.from_s3 else self.web_load
         df_scraped = data_loader()
+        return df_scraped
 
-        industries = self.scrape_stock_industries()
-
-        df = self.clean_df_scraped_and_merge_industries(df_scraped, industries)
-
-        data = (df
-            .reset_index()
-            .to_dict(orient='records')
-        )
-        return data
 
     def web_load(self):
         url = r'https://www.slickcharts.com/{}'.format(self.stock_index_name)
@@ -78,7 +87,7 @@ class StockIndexScraper(object):
 
         return df
 
-    def scrape_stock_industries(self):
+    def scrape_stock_industries(self, save_to_file=False):
         if self.stock_index_name == 'sp500':
             url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
             table_num = 0
@@ -87,13 +96,28 @@ class StockIndexScraper(object):
             table_num = 1
         else:
             raise ValueError('Index Must Be "sp500" or "dowjones"')
+
         df = (pd.read_html(url)[table_num]
             .assign(Symbol=lambda x: x.Symbol.str.replace('NYSE:\xa0', ''))
             .set_index('Symbol')
             .rename(columns={'GICS Sector': 'Industry'})
             .loc[:, ['Industry']]
         )
+
+        if save_to_file:
+            filepath = self.save_df_to_file(df, 'stock_industries')
+            return filepath
+
         return df
+
+    def save_df_to_file(self, df, file_suffix):
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        filename = f"{file_suffix}___{ts}.csv"
+        filepath = path.join(self.DATADIR, filename)
+
+        df.to_csv(filepath)
+
+        return filepath
 
     @staticmethod
     def all_stocks_have_industries(df):
@@ -128,9 +152,7 @@ class StockIndexScraper(object):
         timestr = time.strftime("%Y%m%d-%H%M%S")
         filename = f"{self.stock_index_name}_{timestr}.csv"
 
-        if not path.isdir('data'):
-            mkdir('data')
-        filepath = path.join('data', filename)
+        filepath = path.join(self.DATADIR, filename)
 
         self.data_to_df().to_csv(filepath, index=False)
 
