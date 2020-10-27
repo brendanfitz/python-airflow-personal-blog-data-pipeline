@@ -136,3 +136,4 @@ data/
 logs/
 *\.db
 airflow-webserver.pid
+airflow.db-journal
