@@ -29,19 +29,25 @@ class StockIndexScraper(object):
         self.from_s3 = from_s3
 
         if load_all:
-            self.df_scraped = self.scrape_index_component_stocks()
+            self.load_all()
 
-            self.industries = self.scrape_stock_industries()
+    def load_all(self):
+        self.df_scraped = self.scrape_index_component_stocks()
 
-            self.df = self.clean_df_scraped_and_merge_industries(
-                self.df_scraped,
-                self.industries
-            )
+        self.industries = self.scrape_stock_industries()
 
-            self.data = (self.df
-                .reset_index()
-                .to_dict(orient='records')
-            )
+        frames = [self.df_scraped, self.industries]
+        self.df = self.clean_df_scraped_and_merge_industries(*frames)
+
+        self.data = self.create_data()
+
+    def create_data(self):
+        data = (self.df
+            .reset_index()
+            .to_dict(orient='records')
+        )
+
+        return data
 
     def scrape_index_component_stocks(self, save_to_file=False):
         if self.stock_index_name not in StockIndexScraper.uris:
@@ -59,7 +65,6 @@ class StockIndexScraper(object):
             return filepath
 
         return df
-
 
     def web_load(self):
         url = r'https://www.slickcharts.com/{}'.format(self.stock_index_name)

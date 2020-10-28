@@ -67,11 +67,7 @@ def load_data(stock_index_name, **kwargs):
 
     scraper = StockIndexScraper(stock_index_name, from_s3=True, load_all=False)
     scraper.df = pd.read_csv(filename, index_col='Symbol')
-    scraper.data = (scraper.df
-        .reset_index()
-        .to_dict(orient='records')
-    )
-
+    scraper.data = scraper.create_data()
 
     pghook = PostgresHook('postgres_db')
     cur = pghook.get_cursor()
