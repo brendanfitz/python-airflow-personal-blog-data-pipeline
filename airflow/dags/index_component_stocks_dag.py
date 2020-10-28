@@ -26,53 +26,50 @@ dag = DAG(
     schedule_interval=None,
 )
 
-dummy = DummyOperator(task_id='dummy_op', dag=dag)
+def fetch_stock_industries(stock_index_name):
+    scraper = StockIndexScraper(stock_index_name, from_s3=True, load_all=False)
+    filepath = scraper.scrape_stock_industries(save_to_file=True)
+    return {'filepath': filepath}
 
-"""
-DATADIR = 'data'
-if not path.isdir(DATADIR):
-    mkdir(DATADIR)
+def fetch_stock_prices(stock_index_name):
+    scraper = StockIndexScraper(stock_index_name, from_s3=True, load_all=False)
+    filepath = scraper.scrape_index_component_stocks(save_to_file=True)
+    return {'filepath': filepath}
 
-def save_df_to_file(df, file_suffix):
-    ts = time.strftime("%Y%m%d-%H%M%S")
-    filename = f"{file_suffix}___{ts}.csv"
-    filepath = path.join(DATADIR, filename)
+def clean_and_merge_industries(context):
+    pass
 
-    df.to_csv(filepath)
+def load_data(context):
+    pass
 
-    return filepath
+def cleanup():
+    return
 
-def scrape_stock_industries(stock_index_name):
-    if stock_index_name == 'sp500':
-        url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
-        table_num = 0
-    elif stock_index_name == 'dowjones':
-        url = 'https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average'
-        table_num = 1
-    else:
-        raise ValueError('Index Must Be "sp500" or "dowjones"')
-
-    df = (pd.read_html(url)[table_num]
-        .assign(Symbol=lambda x: x.Symbol.str.replace('NYSE:\xa0', ''))
-        .set_index('Symbol')
-        .rename(columns={'GICS Sector': 'Industry'})
-        .loc[:, ['Industry']]
-    )
-
-    filepath = save_df_to_file(df, 'stock_industries')
-    return filepath
-"""
-def scrape_stock_industries(stock_index_name):
-    try:
-        scraper = StockIndexScraper(stock_index_name, from_s3=True, load_all=False)
-        filepath = scraper.scrape_stock_industries(save_to_file=True)
-        return {'filepath': filepath}
-    except:
-        print("error")
-
-fetch_stock_industries = PythonOperator(
+fetch_stock_industries_task = PythonOperator(
     task_id='fetch_stock_industries',
-    python_callable=scrape_stock_industries,
+    python_callable=fetch_stock_industries,
     op_kwargs={'stock_index_name': 'dowjones'},
     dag=dag,
 )
+
+fetch_stock_prices_task = PythonOperator(
+    task_id='fetch_stock_prices',
+    python_callable=fetch_stock_prices,
+    op_kwargs={'stock_index_name': 'dowjones'},
+    dag=dag,
+)
+
+clean_and_merge_industries_task = PythonOperator(
+    task_id="clean_and_merge_industries",
+    python_callable=clean_and_merge_industries,
+    dag=dag,
+)
+
+cleanup_task = PythonOperator(
+    task_id="cleanup_task",
+    python_callable=cleanup,
+    provide_context=True,
+    dag=dag,
+)
+
+[fetch_stock_industries_task, fetch_stock_prices_task] >> clean_and_merge_industries_task >> cleanup_task
