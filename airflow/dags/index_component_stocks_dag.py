@@ -128,7 +128,7 @@ def create_stock_index_components_dag(stock_index_name):
         f"{stock_index_name}___index_component_stocks",
         default_args=default_args,
         description='loads and cleans data for index stock component blog visuals',
-        schedule_interval=None,
+        schedule_interval="0 0 * * 1,4",
     )
 
     fetch_stock_industries_task = PythonOperator(
