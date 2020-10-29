@@ -1,78 +1,179 @@
 import time
-from os import path, mkdir
+from os import path, mkdir, remove
 import pandas as pd
 from datetime import timedelta
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
-from airflow.operators.dummy_operator import DummyOperator
+from airflow.hooks.postgres_hook import PostgresHook
 
 import sys
 sys.path.insert(0, "/home/brendan/Github/python-airflow-personal-blog-data-pipeline/index_component_stocks")
 from stock_index_scraper import StockIndexScraper
 
-default_args = dict(
-    owner='airflow',
-    depends_on_past=False,
-    catchup=False,
-    start_date='2020-10-25',
-    retries=0,
-    # retry_delay=timedelta(minutes=5)
-)
+def fetch_stock_industries(**kwargs):
+    params = kwargs['params']
+    stock_index_name = params['stock_index_name']
+    from_s3 = params['from_s3']
 
-dag = DAG(
-    'index_component_stocks',
-    default_args=default_args,
-    description='loads and cleans data for index stock component blog visuals',
-    schedule_interval=None,
-)
+    scraper = StockIndexScraper(stock_index_name, from_s3=from_s3, load_all=False)
+    filepath = scraper.scrape_stock_industries(save_to_file=True)
+    return filepath
 
-dummy = DummyOperator(task_id='dummy_op', dag=dag)
+def fetch_stock_prices(**kwargs):
+    params = kwargs['params']
+    stock_index_name = params['stock_index_name']
+    from_s3 = params['from_s3']
 
-"""
-DATADIR = 'data'
-if not path.isdir(DATADIR):
-    mkdir(DATADIR)
+    scraper = StockIndexScraper(stock_index_name, from_s3=from_s3, load_all=False)
+    filepath = scraper.scrape_index_component_stocks(save_to_file=True)
+    return filepath
 
-def save_df_to_file(df, file_suffix):
-    ts = time.strftime("%Y%m%d-%H%M%S")
-    filename = f"{file_suffix}___{ts}.csv"
-    filepath = path.join(DATADIR, filename)
+def clean_and_merge_industries(**kwargs):
+    params = kwargs['params']
+    stock_index_name = params['stock_index_name']
+    from_s3 = params['from_s3']
 
-    df.to_csv(filepath)
+    ti = kwargs['ti']
+
+    prices_filename = ti.xcom_pull(
+        key='return_value',
+        task_ids="fetch_stock_prices"
+    )
+    df_prices = pd.read_csv(prices_filename, index_col='Symbol')
+
+    industries_filename = ti.xcom_pull(
+        key='return_value',
+        task_ids="fetch_stock_industries"
+    )
+    df_industries = pd.read_csv(industries_filename, index_col='Symbol')
+
+    scraper = StockIndexScraper(stock_index_name, from_s3=from_s3, load_all=False)
+    df = scraper.clean_df_scraped_and_merge_industries(df_prices, df_industries)
+    filepath = scraper.save_df_to_file(df, f"{stock_index_name}__clean")
 
     return filepath
 
-def scrape_stock_industries(stock_index_name):
-    if stock_index_name == 'sp500':
-        url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
-        table_num = 0
-    elif stock_index_name == 'dowjones':
-        url = 'https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average'
-        table_num = 1
-    else:
-        raise ValueError('Index Must Be "sp500" or "dowjones"')
+def load_data(**kwargs):
+    params = kwargs['params']
+    stock_index_name = params['stock_index_name']
+    from_s3 = params['from_s3']
 
-    df = (pd.read_html(url)[table_num]
-        .assign(Symbol=lambda x: x.Symbol.str.replace('NYSE:\xa0', ''))
-        .set_index('Symbol')
-        .rename(columns={'GICS Sector': 'Industry'})
-        .loc[:, ['Industry']]
+    ti = kwargs['ti']
+
+    filename = ti.xcom_pull(
+        key='return_value',
+        task_ids="clean_and_merge_industries"
     )
 
-    filepath = save_df_to_file(df, 'stock_industries')
-    return filepath
-"""
-def scrape_stock_industries(stock_index_name):
-    try:
-        scraper = StockIndexScraper(stock_index_name, from_s3=True, load_all=False)
-        filepath = scraper.scrape_stock_industries(save_to_file=True)
-        return {'filepath': filepath}
-    except:
-        print("error")
+    scraper = StockIndexScraper(stock_index_name, from_s3=from_s3, load_all=False)
+    scraper.df = pd.read_csv(filename, index_col='Symbol')
+    scraper.data = scraper.create_data()
 
-fetch_stock_industries = PythonOperator(
-    task_id='fetch_stock_industries',
-    python_callable=scrape_stock_industries,
-    op_kwargs={'stock_index_name': 'dowjones'},
-    dag=dag,
-)
+    pghook = PostgresHook('postgres_db')
+    cur = pghook.get_cursor()
+
+    # delete old data
+    delete_stmt = ("DELETE FROM visuals.index_component_stocks "
+                   "WHERE stock_index_name = %s")
+    cur.execute(delete_stmt, (stock_index_name, ))
+
+    # insert new data
+    row_count = 0
+    for row in scraper.data_to_tuples():
+        insert_stmt = ("INSERT INTO visuals.index_component_stocks "
+                       "VALUES""(%s,%s,%s,%s,%s,%s,%s)")
+        cur.execute(insert_stmt, row)
+        row_count += 1
+
+    pghook.conn.commit()
+
+    return {'row_count': row_count}
+
+def cleanup(**kwargs):
+    ti = kwargs['ti']
+
+    prices_filename = ti.xcom_pull(
+        key='return_value',
+        task_ids="fetch_stock_prices"
+    )
+
+    industries_filename = ti.xcom_pull(
+        key='return_value',
+        task_ids="fetch_stock_industries"
+    )
+
+    cleaned_filename = ti.xcom_pull(
+        key='return_value',
+        task_ids="clean_and_merge_industries"
+    )
+
+    for filename in [prices_filename, industries_filename, cleaned_filename]:
+        remove(filename)
+
+def create_stock_index_components_dag(stock_index_name):
+    default_args = dict(
+        owner='airflow',
+        depends_on_past=False,
+        catchup=False,
+        start_date='2020-10-25',
+        retries=0,
+        # retry_delay=timedelta(minutes=5)
+        params={
+            'stock_index_name': stock_index_name,
+            'from_s3': False,
+        }
+    )
+
+    dag = DAG(
+        f"{stock_index_name}___index_component_stocks",
+        default_args=default_args,
+        description='loads and cleans data for index stock component blog visuals',
+        schedule_interval="0 0 * * 1,4",
+    )
+
+    fetch_stock_industries_task = PythonOperator(
+        task_id='fetch_stock_industries',
+        python_callable=fetch_stock_industries,
+        provide_context=True,
+        dag=dag,
+    )
+
+    fetch_stock_prices_task = PythonOperator(
+        task_id='fetch_stock_prices',
+        python_callable=fetch_stock_prices,
+        provide_context=True,
+        dag=dag,
+    )
+
+    clean_and_merge_industries_task = PythonOperator(
+        task_id="clean_and_merge_industries",
+        python_callable=clean_and_merge_industries,
+        provide_context=True,
+        dag=dag,
+    )
+
+    load_data_task = PythonOperator(
+        task_id="load_data",
+        python_callable=load_data,
+        provide_context=True,
+        dag=dag,
+    )
+
+    cleanup_task = PythonOperator(
+        task_id="cleanup_task",
+        python_callable=cleanup,
+        provide_context=True,
+        dag=dag,
+    )
+
+    (
+        [fetch_stock_industries_task, fetch_stock_prices_task] >>
+        clean_and_merge_industries_task >>
+        load_data_task >>
+        cleanup_task
+    )
+
+    return dag
+
+dow_jones_dag = create_stock_index_components_dag('dowjones')
+sp500_dag = create_stock_index_components_dag('sp500')

@@ -17,6 +17,10 @@ class StockIndexScraper(object):
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36", 
     }
     DATADIR = 'data'
+    AWS_CONFIG = {
+        'aws_access_key_id': environ.get('METIS_APP_AWS_ACCESS_KEY_ID'),
+        'aws_secret_access_key': environ.get('METIS_APP_AWS_SECRET_KEY'),
+    }
 
     def __init__(self, stock_index_name, from_s3, load_all=True):
         if not path.isdir(self.DATADIR):
@@ -25,29 +29,42 @@ class StockIndexScraper(object):
         self.from_s3 = from_s3
 
         if load_all:
-            self.df_scraped = self.scrape_index_component_stocks()
+            self.load_all()
 
-            self.industries = self.scrape_stock_industries()
+    def load_all(self):
+        self.df_scraped = self.scrape_index_component_stocks()
 
-            self.df = self.clean_df_scraped_and_merge_industries(
-                self.df_scraped,
-                self.industries
-            )
+        self.industries = self.scrape_stock_industries()
 
-            self.data = (self.df
-                .reset_index()
-                .to_dict(orient='records')
-            )
+        frames = [self.df_scraped, self.industries]
+        self.df = self.clean_df_scraped_and_merge_industries(*frames)
 
-    def scrape_index_component_stocks(self):
+        self.data = self.create_data()
+
+    def create_data(self):
+        data = (self.df
+            .reset_index()
+            .to_dict(orient='records')
+        )
+
+        return data
+
+    def scrape_index_component_stocks(self, save_to_file=False):
         if self.stock_index_name not in StockIndexScraper.uris:
             msg = f'stock_index_name must be in {StockIndexScraper.uris}'
             raise ValueError(msg)
 
         data_loader = self.s3_load if self.from_s3 else self.web_load
-        df_scraped = data_loader()
-        return df_scraped
+        df = data_loader()
 
+        if save_to_file:
+            filepath = self.save_df_to_file(
+                df,
+                f"{self.stock_index_name}__component_stocks"
+            )
+            return filepath
+
+        return df
 
     def web_load(self):
         url = r'https://www.slickcharts.com/{}'.format(self.stock_index_name)
@@ -70,11 +87,7 @@ class StockIndexScraper(object):
         return df
 
     def s3_load(self):
-        aws_config = {
-            'aws_access_key_id': environ.get('METIS_APP_AWS_ACCESS_KEY_ID'),
-            'aws_secret_access_key': environ.get('METIS_APP_AWS_SECRET_KEY'),
-        }
-        client = boto3.client('s3', **aws_config)
+        client = boto3.client('s3', **self.AWS_CONFIG)
 
         response = client.get_object(
             Bucket='metis-projects',
@@ -88,21 +101,32 @@ class StockIndexScraper(object):
         return df
 
     def scrape_stock_industries(self, save_to_file=False):
-        if self.stock_index_name == 'sp500':
-            url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
-            table_num = 0
-        elif self.stock_index_name == 'dowjones':
-            url = 'https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average'
-            table_num = 1
-        else:
-            raise ValueError('Index Must Be "sp500" or "dowjones"')
+        if self.from_s3:
+            client = boto3.client('s3', **self.AWS_CONFIG)
 
-        df = (pd.read_html(url)[table_num]
-            .assign(Symbol=lambda x: x.Symbol.str.replace('NYSE:\xa0', ''))
-            .set_index('Symbol')
-            .rename(columns={'GICS Sector': 'Industry'})
-            .loc[:, ['Industry']]
-        )
+            response = client.get_object(
+                Bucket='metis-projects',
+                Key="stock_index_data/stock_industries___20201028-144545.csv",
+            )
+            df = (pd.read_csv(response.get('Body'))
+                .set_index('Symbol')
+            )
+        else:
+            if self.stock_index_name == 'sp500':
+                url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+                table_num = 0
+            elif self.stock_index_name == 'dowjones':
+                url = 'https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average'
+                table_num = 1
+            else:
+                raise ValueError('Index Must Be "sp500" or "dowjones"')
+
+            df = (pd.read_html(url)[table_num]
+                .assign(Symbol=lambda x: x.Symbol.str.replace('NYSE:\xa0', ''))
+                .set_index('Symbol')
+                .rename(columns={'GICS Sector': 'Industry'})
+                .loc[:, ['Industry']]
+            )
 
         if save_to_file:
             filepath = self.save_df_to_file(df, 'stock_industries')
