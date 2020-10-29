@@ -2,8 +2,8 @@
 
 ### Background
 
-This Airflow repository is used as an ETL data pipeline to power the data behind [my blog](https://www.brendan-fitzpatrick.com/) visuals. Each dag corresponds to a data source for a specific visualization and is load into a PostgreSQL server. The data is sourced from various APIs or scrapes public sites. 
+This Airflow repository is used as an ETL data pipeline to power the data behind [my blog](https://www.brendan-fitzpatrick.com/) visuals. Each dag corresponds to a data source for a specific visualization. The data is sourced from various APIs or scraped from public sites and then loaded into a PostgreSQL server on the same EC2 instance.
 
-An instance of this currently running live an EC2 server. I have also included various bash scripts used for server maintenance.
+An instance of this currently running live an EC2 server. As a bonus, included are various bash scripts used for server maintenance (each specially written by yours truly!).
 
 Enjoy!
