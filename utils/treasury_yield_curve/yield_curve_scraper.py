@@ -31,9 +31,9 @@ class YieldCurveScraper(object):
         self.data = self.get_yield_curve()
     
     def create_url(self):
-        base = "https://data.treasury.gov/feed.svc/DailyTreasuryYieldCurveRateData"
-        qstr = '?$filter=year(NEW_DATE)%20eq%20{}'.format(self.year)
-        url = base + qstr
+        base = 'https://data.treasury.gov/feed.svc/DailyTreasuryYieldCurveRateData'
+        query = {'$filter': 'month(NEW_DATE) eq 10 and year(NEW_DATE) eq 2020'}
+        url = base + '?' + urlencode(query, safe="$()", quote_via=quote)
         return url
     
     def get_yield_curve(self):
