@@ -7,7 +7,8 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.hooks.postgres_hook import PostgresHook
 
 import sys
-sys.path.insert(0, "/home/brendan/Github/python-airflow-personal-blog-data-pipeline/index_component_stocks")
+sys.path.insert(0,
+                "/home/brendan/Github/python-airflow-personal-blog-data-pipeline/utils/index_component_stocks")
 from stock_index_scraper import StockIndexScraper
 
 def fetch_stock_industries(**kwargs):
