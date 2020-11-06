@@ -76,10 +76,27 @@ class YieldCurveScraper(object):
         filename = f"treasury_yield_curve___{ts}.csv"
         filepath = path.join(self.DATADIR, filename)
 
-        df = pd.DataFrame(self.data)
-
-        df.Date = pd.to_datetime(df.Date)
-
+        df = self.data_to_df()
         df.to_csv(filepath, index=False, date_format='%Y-%m-%d')
 
         return filepath
+
+    def data_to_df(self):
+        df = (pd.DataFrame(self.data)
+            .assign(Date=lambda x: pd.to_datetime(x.Date))
+            .melt(id_vars=('ID', 'Date'), var_name='Instrument', value_name='Yield')
+            .drop('ID', axis=1)
+        )
+
+        return df
+
+
+if __name__ == '__main__':
+    import datetime as dt
+
+    yesterday = dt.date.today() - dt.timedelta(days=1)
+    year = yesterday.strftime('%Y')
+    month = yesterday.strftime('%m')
+    scraper = YieldCurveScraper(year, month)
+    filepath = scraper.write_to_csv()
+    print(f"Scraping successful\nSee filepath located at {filepath}")
