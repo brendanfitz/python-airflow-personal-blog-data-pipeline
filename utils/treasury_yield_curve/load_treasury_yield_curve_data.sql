@@ -5,7 +5,6 @@ CREATE TEMP TABLE temp (
 );
 
 COPY temp (date, instrument, yield)
---FROM '/home/brendan/Github/python-airflow-personal-blog-data-pipeline/data/treasury_yield_curve___20201106-222652.csv'
 FROM '/home/brendan/Github/python-airflow-personal-blog-data-pipeline/{}'
 DELIMITER ',' CSV HEADER;
 
