@@ -1,5 +1,4 @@
 import sys
-from os import remove
 import datetime as dt
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
@@ -32,13 +31,6 @@ def fetch_treasury_data():
     filepath = scraper.write_to_csv()
     return filepath
 
-def cleanup(**context):
-    ti = context['ti']
-
-    filename = ti.xcom_pull(key='return_value', task_ids='fetch_treasury_data')
-
-    remove(filename)
-
 fetch_treasury_data_task = PythonOperator(
     task_id='fetch_treasury_data',
     python_callable=fetch_treasury_data,
@@ -64,10 +56,9 @@ vaccum_table_task = PostgresOperator(
     dag=dag,
 )
 
-cleanup_task = PythonOperator(
-    task_id='cleanup',
-    python_callable=cleanup,
-    provide_context=True,
+cleanup_task = BashOperator(
+    task_id='file_cleanup',
+    bash_command=f"rm /home/brendan/Github/python-airflow-personal-blog-data-pipeline/{xcom_macro}",
     dag=dag,
 )
 
