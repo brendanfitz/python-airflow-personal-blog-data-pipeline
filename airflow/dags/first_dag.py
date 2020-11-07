@@ -40,4 +40,11 @@ sendoff_task = BashOperator(
     dag=dag,
 )
 
+pwd = BashOperator(
+    task_id="pwd",
+    bash_command="pwd",
+    dag=dag,
+)
+
+
 greeting_task >> date_task >> sendoff_task
